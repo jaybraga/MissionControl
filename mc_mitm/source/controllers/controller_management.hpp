@@ -49,6 +49,8 @@ namespace ams::controller {
 
     constexpr const char ProControllerName[] = "Pro Controller";
     constexpr const char LicensedProControllerName[] = "Lic Pro Controller";
+    constexpr const char LeftJoyConBtmName[] = "Joy-Con (L)";
+    constexpr const char RightJoyConBtmName[] = "Joy-Con (R)";
     constexpr const char WiiControllerPrefix[] = "Nintendo RVL";
 
     enum ControllerType {
@@ -95,5 +97,10 @@ namespace ams::controller {
     void AttachHandler(bluetooth::Address address);
     void RemoveHandler(bluetooth::Address address);
     std::shared_ptr<SwitchController> LocateHandler(bluetooth::Address address);
+
+    // Bluetooth device name reported to HOS for an emulated controller. Kept
+    // consistent with the controller type reported in the GetDeviceInfo response,
+    // so a controller emulating a Joy-Con also shows up as one at the BT level.
+    const char *GetEmulatedControllerName(bluetooth::Address address);
 
 }

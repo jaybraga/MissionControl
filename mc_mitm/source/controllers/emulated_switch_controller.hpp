@@ -39,6 +39,8 @@ namespace ams::controller {
             virtual Result Initialize() override;
             virtual constexpr bool IsOfficialController() const override { return false; }
 
+            virtual JoyConEmulationType GetJoyConEmulationType() const override { return m_joycon_emulation_type; }
+
             virtual Result HandleOutputDataReport(const u8 *report_buffer, size_t size) override;
             virtual Result InjectInputReport(const u8 *report_buffer, size_t size);
 
@@ -47,6 +49,26 @@ namespace ams::controller {
             virtual Result SetVibration(const SwitchMotorData *motor_data) { AMS_UNUSED(motor_data); R_SUCCEED(); }
             virtual Result CancelVibration() { R_SUCCEED(); }
             virtual Result SetPlayerLed(SwitchPlayerNumber player_number) { AMS_UNUSED(player_number); R_SUCCEED(); }
+
+            // Cycle ProController -> JoyConRight -> JoyConLeft -> ProController on a
+            // rising edge of L3 + R3 (StickL + StickR), if enabled in config. Reads
+            // and updates m_buttons/m_buttons_prev; call after m_buttons has been
+            // assigned for the current report.
+            void UpdateJoyConEmulationCombo();
+
+            // Change the controller identity (device info) reported to HOS and force
+            // it to re-identify the controller without dropping the Bluetooth link.
+            Result SetJoyConEmulationType(JoyConEmulationType type);
+
+            // Rewrite m_buttons/m_left_stick/m_right_stick (already populated for the
+            // current report) into the single-Joy-Con layout, if m_joycon_emulation_type
+            // is not ProController. No-op otherwise.
+            void ApplyJoyConEmulationButtons();
+
+            // Rotate an accelerometer/gyroscope sample pair from the Pro Controller
+            // frame into the single-Joy-Con's own upright frame. Call before handing
+            // accel/gyro to the sixaxis processor. No-op if not emulating a Joy-Con.
+            void ApplyJoyConEmulationMotion(utils::Vec3d<float> *accel, utils::Vec3d<float> *gyro);
 
             virtual size_t FillInputReport(u8 *report_buffer, size_t size) override;
 
@@ -67,6 +89,9 @@ namespace ams::controller {
 
         protected:
             SwitchDeviceInfo m_device_info;
+
+            JoyConEmulationType m_joycon_emulation_type;
+            SwitchButtons m_buttons_prev;
 
             u8 m_latency_timer;
             SwitchPowerInfo m_power_info;

@@ -28,6 +28,9 @@ namespace ams::bluetooth::hid {
     os::SystemEvent *GetForwardEvent();
     os::SystemEvent *GetUserForwardEvent();
 
+    // Signal a fake disconnect/reconnect pair to HOS so that it renegotiates
+    // the controller's identity without actually dropping the Bluetooth link.
+    Result VirtualReconnect(bluetooth::Address address);
     void SignalFakeEvent(bluetooth::HidEventType type, const void *data, size_t size);
     Result GetEventInfo(bluetooth::HidEventType *type, void *buffer, size_t size);
     void HandleEvent();

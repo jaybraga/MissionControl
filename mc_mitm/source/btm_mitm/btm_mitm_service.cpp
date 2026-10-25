@@ -25,7 +25,7 @@ namespace ams::mitm::btm {
             for (unsigned int i = 0; i < count; ++i) {
                 auto device = &devices[i];
                 if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name)) {
-                    std::strncpy(device->name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                    std::strncpy(device->name, controller::GetEmulatedControllerName(device->address), sizeof(device->name) - 1);
                 }
             }
         }
@@ -39,7 +39,7 @@ namespace ams::mitm::btm {
         for (int i = 0; i < total_out.GetValue(); ++i) {
             auto device = &device_condition[i];
             if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name)) {
-                std::strncpy(device->name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                std::strncpy(device->name, controller::GetEmulatedControllerName(device->address), sizeof(device->name) - 1);
             }
         }
 
@@ -53,7 +53,7 @@ namespace ams::mitm::btm {
         for (int i = 0; i < total_out.GetValue(); ++i) {
             auto device = &device_info[i];
             if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name)) {
-                std::strncpy(device->name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                std::strncpy(device->name, controller::GetEmulatedControllerName(device->addr), sizeof(device->name) - 1);
             }
         }
 
@@ -67,10 +67,10 @@ namespace ams::mitm::btm {
         for (int i = 0; i < total_out.GetValue(); ++i) {
             auto device = &device_info[i];
             if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name)) {
-                std::strncpy(device->name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                std::strncpy(device->name, controller::GetEmulatedControllerName(device->addr), sizeof(device->name) - 1);
             }
         }
-        
+
         R_SUCCEED();
     }
 
@@ -81,7 +81,7 @@ namespace ams::mitm::btm {
         for (int i = 0; i < total_out.GetValue(); ++i) {
             auto device = &device_condition[i];
             if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name)) {
-                std::strncpy(device->name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                std::strncpy(device->name, controller::GetEmulatedControllerName(device->address), sizeof(device->name) - 1);
             }
         }
 
@@ -134,7 +134,7 @@ namespace ams::mitm::btm {
         for (unsigned int i = 0; i < device_info_list->device_count; ++i) {
             auto device = &device_info_list->devices[i];
             if ((device->profile == BtmProfile_Hid) && !controller::IsOfficialSwitchControllerName(device->name.name)) {
-                std::strncpy(device->name.name, controller::LicensedProControllerName, sizeof(device->name) - 1);
+                std::strncpy(device->name.name, controller::GetEmulatedControllerName(device->addr), sizeof(device->name) - 1);
             }
         }
 

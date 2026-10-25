@@ -22,6 +22,11 @@ namespace ams::mitm {
         struct {
             bool enable_rumble;
             bool enable_motion;
+            // Joy-Con emulation type to report for unofficial controllers at startup.
+            // See controller::JoyConEmulationType in controllers/switch_controller.hpp.
+            int emulated_controller_type;
+            // Allow cycling the emulated controller type at runtime with L3 + R3.
+            bool enable_controller_type_combo;
         } general;
 
         struct {

@@ -27,7 +27,9 @@ namespace ams::mitm {
         constinit MissionControlConfig g_global_config = {
             .general = {
                 .enable_rumble = true,
-                .enable_motion = true
+                .enable_motion = true,
+                .emulated_controller_type = 0,      // JoyConEmulationType::ProController
+                .enable_controller_type_combo = true
             },
             .misc = {
                 .analog_trigger_activation_threshold = 50,
@@ -53,6 +55,16 @@ namespace ams::mitm {
             int tmp = std::strtol(value, nullptr, 10);
             if ((tmp >= min) && (tmp <= max)) {
                 *out = tmp;
+            }
+        }
+
+        void ParseEmulatedControllerType(const char *value, int *out) {
+            if (strcasecmp(value, "pro") == 0) {
+                *out = 0;   // JoyConEmulationType::ProController
+            } else if ((strcasecmp(value, "joycon_r") == 0) || (strcasecmp(value, "right_joycon") == 0)) {
+                *out = 1;   // JoyConEmulationType::JoyConRight
+            } else if ((strcasecmp(value, "joycon_l") == 0) || (strcasecmp(value, "left_joycon") == 0)) {
+                *out = 2;   // JoyConEmulationType::JoyConLeft
             }
         }
 
@@ -87,6 +99,10 @@ namespace ams::mitm {
                     ParseBoolean(value, &config->general.enable_rumble);
                 } else if (strcasecmp(name, "enable_motion") == 0) {
                     ParseBoolean(value, &config->general.enable_motion);
+                } else if (strcasecmp(name, "emulated_controller_type") == 0) {
+                    ParseEmulatedControllerType(value, &config->general.emulated_controller_type);
+                } else if (strcasecmp(name, "enable_controller_type_combo") == 0) {
+                    ParseBoolean(value, &config->general.enable_controller_type_combo);
                 }
             } else if (strcasecmp(section, "bluetooth") == 0) {
                 if (strcasecmp(name, "host_name") == 0) {

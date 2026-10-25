@@ -26,6 +26,15 @@ namespace ams::controller {
 
     std::string GetControllerDirectory(bluetooth::Address address);
 
+    // Identity an EmulatedSwitchController is currently reporting to HOS for the
+    // Joy-Con emulation feature. Official (passthrough) controllers always report
+    // ProController (ie. "not emulating anything").
+    enum class JoyConEmulationType : u8 {
+        ProController = 0,
+        JoyConRight   = 1,
+        JoyConLeft    = 2,
+    };
+
     class SwitchController {
 
         public:
@@ -50,6 +59,11 @@ namespace ams::controller {
 
             virtual Result Initialize() { R_SUCCEED(); };
             virtual constexpr bool IsOfficialController() const { return true; }
+
+            // The Joy-Con emulation type currently being reported. Official
+            // controllers are passed through untouched, so they always report
+            // as themselves (ProController, ie. no emulation).
+            virtual JoyConEmulationType GetJoyConEmulationType() const { return JoyConEmulationType::ProController; }
 
             virtual void HandleDataReportEvent(const bluetooth::HidReportEventInfo *event_info);
             virtual void HandleSetReportEvent(const bluetooth::HidReportEventInfo *event_info);

@@ -14,12 +14,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "emulated_switch_controller.hpp"
+#include "../bluetooth_mitm/bluetooth/bluetooth_hid.hpp"
 #include "../mcmitm_config.hpp"
 
 namespace ams::controller {
 
     EmulatedSwitchController::EmulatedSwitchController(bluetooth::Address address, HardwareID id) : SwitchController(address, id)
     , m_device_info(SwitchDevices::ProController)
+    , m_joycon_emulation_type(JoyConEmulationType::ProController)
     , m_latency_timer(0)
     , m_input_report_mode(SwitchHidReportId::BasicInputReport)
     , m_vibration_processor(this)
@@ -29,6 +31,20 @@ namespace ams::controller {
         m_vibration_processor.SetEnabled(config->general.enable_rumble);
         m_enable_motion = config->general.enable_motion;
         m_trigger_threshold = config->misc.analog_trigger_activation_threshold / 100.0;
+
+        // Start up already emulating the configured Joy-Con type, if any.
+        switch (static_cast<JoyConEmulationType>(config->general.emulated_controller_type)) {
+            case JoyConEmulationType::JoyConRight:
+                m_joycon_emulation_type = JoyConEmulationType::JoyConRight;
+                m_device_info = SwitchDevices::JoyConRight;
+                break;
+            case JoyConEmulationType::JoyConLeft:
+                m_joycon_emulation_type = JoyConEmulationType::JoyConLeft;
+                m_device_info = SwitchDevices::JoyConLeft;
+                break;
+            default:
+                break;
+        }
     };
 
     Result EmulatedSwitchController::Initialize() {
@@ -45,9 +61,156 @@ namespace ams::controller {
 
     void EmulatedSwitchController::Reset() {
         m_buttons.Reset();
+        m_buttons_prev.Reset();
         m_left_stick.Reset();
         m_right_stick.Reset();
         m_sixaxis_processor.Reset();
+    }
+
+    void EmulatedSwitchController::UpdateJoyConEmulationCombo() {
+        if (!mitm::GetGlobalConfig()->general.enable_controller_type_combo)
+            return;
+
+        const SwitchButtons StickCombo = SwitchButton::StickL | SwitchButton::StickR;
+
+        const bool combo_now  = m_buttons.All(StickCombo);
+        const bool combo_prev = m_buttons_prev.All(StickCombo);
+        m_buttons_prev = m_buttons;
+
+        if (combo_now && !combo_prev) {
+            switch (m_joycon_emulation_type) {
+                case JoyConEmulationType::JoyConRight:
+                    R_DISCARD(this->SetJoyConEmulationType(JoyConEmulationType::JoyConLeft));
+                    break;
+                case JoyConEmulationType::JoyConLeft:
+                    R_DISCARD(this->SetJoyConEmulationType(JoyConEmulationType::ProController));
+                    break;
+                default:
+                    R_DISCARD(this->SetJoyConEmulationType(JoyConEmulationType::JoyConRight));
+                    break;
+            }
+        }
+    }
+
+    Result EmulatedSwitchController::SetJoyConEmulationType(JoyConEmulationType type) {
+        if (type == m_joycon_emulation_type) {
+            R_SUCCEED();
+        }
+
+        m_joycon_emulation_type = type;
+
+        switch (type) {
+            case JoyConEmulationType::JoyConRight:
+                m_device_info = SwitchDevices::JoyConRight;
+                break;
+            case JoyConEmulationType::JoyConLeft:
+                m_device_info = SwitchDevices::JoyConLeft;
+                break;
+            default:
+                m_device_info = SwitchDevices::ProController;
+                break;
+        }
+
+        // Make HOS drop and re-identify the controller so that it picks up the new
+        // type from the GetDeviceInfo response, without actually losing the
+        // underlying Bluetooth connection.
+        R_RETURN(bluetooth::hid::VirtualReconnect(m_address));
+    }
+
+    void EmulatedSwitchController::ApplyJoyConEmulationButtons() {
+        // A single Joy-Con is held horizontally, but its reports are always expressed
+        // in the Joy-Con's own upright frame - HOS applies the horizontal rotation
+        // itself. So the stick has to be rotated into that upright frame here, same
+        // as the motion data in ApplyJoyConEmulationMotion.
+        switch (m_joycon_emulation_type) {
+            case JoyConEmulationType::JoyConRight:
+                {
+                    u16 x, y;
+                    if (m_buttons.Any(SwitchButton::Up | SwitchButton::Down | SwitchButton::Left | SwitchButton::Right)) {
+                        x = m_buttons.Test(SwitchButton::Down) ? SwitchAnalogStick::MaximumValue : (m_buttons.Test(SwitchButton::Up)   ? SwitchAnalogStick::MinimumValue : SwitchAnalogStick::CenterValue);
+                        y = m_buttons.Test(SwitchButton::Right) ? SwitchAnalogStick::MaximumValue : (m_buttons.Test(SwitchButton::Left) ? SwitchAnalogStick::MinimumValue : SwitchAnalogStick::CenterValue);
+                    } else {
+                        x = SwitchAnalogStick::MaximumValue - m_left_stick.GetY();
+                        y = m_left_stick.GetX();
+                    }
+
+                    // Write the rotated value into both stick fields so it is picked up
+                    // regardless of which one HOS reads for this controller type.
+                    m_left_stick.SetValues(x, y);
+                    m_right_stick.SetValues(x, y);
+
+                    SwitchButtons buttons = m_buttons;
+                    buttons.Assign(SwitchButton::RightSL, m_buttons.Any(SwitchButton::L | SwitchButton::ZL));
+                    buttons.Assign(SwitchButton::RightSR, m_buttons.Any(SwitchButton::R | SwitchButton::ZR));
+                    buttons.Assign(SwitchButton::A, m_buttons.Test(SwitchButton::B));
+                    buttons.Assign(SwitchButton::B, m_buttons.Test(SwitchButton::Y));
+                    buttons.Assign(SwitchButton::X, m_buttons.Test(SwitchButton::A));
+                    buttons.Assign(SwitchButton::Y, m_buttons.Test(SwitchButton::X));
+                    m_buttons = buttons;
+                }
+                break;
+
+            case JoyConEmulationType::JoyConLeft:
+                {
+                    u16 x, y;
+                    if (m_buttons.Any(SwitchButton::Up | SwitchButton::Down | SwitchButton::Left | SwitchButton::Right)) {
+                        x = m_buttons.Test(SwitchButton::Up)   ? SwitchAnalogStick::MaximumValue : (m_buttons.Test(SwitchButton::Down)  ? SwitchAnalogStick::MinimumValue : SwitchAnalogStick::CenterValue);
+                        y = m_buttons.Test(SwitchButton::Left) ? SwitchAnalogStick::MaximumValue : (m_buttons.Test(SwitchButton::Right) ? SwitchAnalogStick::MinimumValue : SwitchAnalogStick::CenterValue);
+                    } else {
+                        x = m_left_stick.GetY();
+                        y = SwitchAnalogStick::MaximumValue - m_left_stick.GetX();
+                    }
+
+                    m_left_stick.SetValues(x, y);
+                    m_right_stick.SetValues(x, y);
+
+                    SwitchButtons buttons = m_buttons;
+                    buttons.Assign(SwitchButton::LeftSL, m_buttons.Any(SwitchButton::L | SwitchButton::ZL));
+                    buttons.Assign(SwitchButton::LeftSR, m_buttons.Any(SwitchButton::R | SwitchButton::ZR));
+                    buttons.Assign(SwitchButton::Down,  m_buttons.Test(SwitchButton::A));
+                    buttons.Assign(SwitchButton::Left,  m_buttons.Test(SwitchButton::B));
+                    buttons.Assign(SwitchButton::Up,    m_buttons.Test(SwitchButton::Y));
+                    buttons.Assign(SwitchButton::Right, m_buttons.Test(SwitchButton::X));
+                    m_buttons = buttons;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    void EmulatedSwitchController::ApplyJoyConEmulationMotion(utils::Vec3d<float> *accel, utils::Vec3d<float> *gyro) {
+        switch (m_joycon_emulation_type) {
+            case JoyConEmulationType::JoyConRight:
+                {
+                    const float ax = accel->x;
+                    accel->x = -accel->y;
+                    accel->y = -ax;
+                    accel->z = -accel->z;
+
+                    const float gx = gyro->x;
+                    gyro->x = -gyro->y;
+                    gyro->y = -gx;
+                    gyro->z = -gyro->z;
+                }
+                break;
+
+            case JoyConEmulationType::JoyConLeft:
+                {
+                    const float ax = accel->x;
+                    accel->x = accel->y;
+                    accel->y = -ax;
+
+                    const float gx = gyro->x;
+                    gyro->x = gyro->y;
+                    gyro->y = -gx;
+                }
+                break;
+
+            default:
+                break;
+        }
     }
 
     Result EmulatedSwitchController::InjectInputReport(const u8 *report_buffer, size_t size) {

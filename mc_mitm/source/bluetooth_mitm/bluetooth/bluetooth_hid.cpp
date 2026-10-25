@@ -58,6 +58,41 @@ namespace ams::bluetooth::hid {
         return &g_system_event_user_fwd;
     }
 
+    Result VirtualReconnect(bluetooth::Address address) {
+        bluetooth::HidEventInfo event_info = {};
+
+        const bool is_v12 = hos::GetVersion() >= hos::Version_12_0_0;
+
+        // Signal a fake disconnection event
+        if (is_v12) {
+            event_info.connection.v12.status = BtdrvHidConnectionStatus_Closed;
+            event_info.connection.v12.addr = address;
+        } else {
+            event_info.connection.v1.addr = address;
+            event_info.connection.v1.status = static_cast<BtdrvHidConnectionStatus>(BtdrvHidConnectionStatusOld_Closed);
+        }
+        SignalFakeEvent(BtdrvHidEventType_Connection, &event_info, sizeof(event_info));
+        g_data_read_event.Wait();
+
+        // Give HOS a moment to tear down its state. Without this it drops the
+        // controller for real instead of just re-identifying it.
+        os::SleepThread(ams::TimeSpan::FromMilliSeconds(100));
+
+        // Signal a fake connection event
+        event_info = {};
+        if (is_v12) {
+            event_info.connection.v12.status = BtdrvHidConnectionStatus_Opened;
+            event_info.connection.v12.addr = address;
+        } else {
+            event_info.connection.v1.addr = address;
+            event_info.connection.v1.status = static_cast<BtdrvHidConnectionStatus>(BtdrvHidConnectionStatusOld_Opened);
+        }
+        SignalFakeEvent(BtdrvHidEventType_Connection, &event_info, sizeof(event_info));
+        g_data_read_event.Wait();
+
+        R_SUCCEED();
+    }
+
     void SignalFakeEvent(bluetooth::HidEventType type, const void *data, size_t size) {
         g_current_event_type = type;
         std::memcpy(&g_event_info, data, size);

@@ -230,6 +230,22 @@ namespace ams::controller {
         return false;
     }
 
+    const char *GetEmulatedControllerName(bluetooth::Address address) {
+        auto controller = LocateHandler(address);
+        if (controller) {
+            switch (controller->GetJoyConEmulationType()) {
+                case JoyConEmulationType::JoyConLeft:
+                    return LeftJoyConBtmName;
+                case JoyConEmulationType::JoyConRight:
+                    return RightJoyConBtmName;
+                default:
+                    break;
+            }
+        }
+
+        return LicensedProControllerName;
+    }
+
     void AttachHandler(bluetooth::Address address) {
         bluetooth::DevicesSettings device_settings;
         R_ABORT_UNLESS(btdrvGetPairedDeviceInfo(address, &device_settings));

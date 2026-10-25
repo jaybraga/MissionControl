@@ -198,6 +198,9 @@ namespace ams::controller {
         button_state.Assign(SwitchButton::Capture, src->input0x01.buttons.mute);
         button_state.Assign(SwitchButton::Home,    src->input0x01.buttons.ps);
         m_buttons = button_state;
+
+        this->UpdateJoyConEmulationCombo();
+        this->ApplyJoyConEmulationButtons();
     }
 
     void DualsenseController::MapInputReport0x31(const DualsenseReportData *src) {
@@ -256,6 +259,9 @@ namespace ams::controller {
         }
         m_buttons = button_state;
 
+        this->UpdateJoyConEmulationCombo();
+        this->ApplyJoyConEmulationButtons();
+
         utils::Vec3d<float> accel = {
             .x = -src->input0x31.acc_z / float(m_motion_calibration.acc.z_max),
             .y = -src->input0x31.acc_x / float(m_motion_calibration.acc.x_max),
@@ -267,6 +273,8 @@ namespace ams::controller {
             .y = -(src->input0x31.vel_x - m_motion_calibration.gyro.pitch_bias) / (float(m_motion_calibration.gyro.pitch_max - m_motion_calibration.gyro.pitch_bias) / m_motion_calibration.gyro.speed_max),
             .z =  (src->input0x31.vel_y - m_motion_calibration.gyro.yaw_bias)   / (float(m_motion_calibration.gyro.yaw_max   - m_motion_calibration.gyro.yaw_bias)   / m_motion_calibration.gyro.speed_max)
         };
+
+        this->ApplyJoyConEmulationMotion(&accel, &gyro);
 
         m_sixaxis_processor.Update(accel, gyro);
     }
